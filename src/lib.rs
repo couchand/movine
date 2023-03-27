@@ -47,7 +47,7 @@ use errors::Result;
 use file_handler::FileHandler;
 use migration::MigrationBuilder;
 pub use plan_builder::{PlanBuilder, PlanBuilder2};
-pub use migration::Migration;
+pub use migration::{EmbeddedMigration, Migration};
 pub use match_maker::Matching;
 
 pub use movine_macro::embed_migrations;
@@ -78,9 +78,10 @@ impl<T: DbAdaptor> Movine2<T> {
         Ok(Movine2 { movine, local_migrations, db_migrations })
     }
 
-    pub fn new_with_local(adaptor: T, local_migrations: Vec<Migration>) -> Result<Self> {
+    pub fn new_with_local<M: Into<Migration>, I: IntoIterator<Item = M>>(adaptor: T, local_migrations: I) -> Result<Self> {
         let mut movine = Movine::new(adaptor);
         let db_migrations = movine.adaptor.load_migrations()?;
+        let local_migrations = local_migrations.into_iter().map(|v| v.into()).collect();
         let movine = std::cell::RefCell::from(movine);
         Ok(Movine2 { movine, local_migrations, db_migrations })
     }

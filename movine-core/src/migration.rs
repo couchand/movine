@@ -4,6 +4,25 @@ use log::debug;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+#[derive(Debug)]
+pub struct EmbeddedMigration {
+    pub name: &'static str,
+    pub up_sql: &'static str,
+    pub down_sql: &'static str,
+    pub hash: &'static str,
+}
+
+impl From<&EmbeddedMigration> for Migration {
+    fn from(m: &EmbeddedMigration) -> Self {
+        Migration {
+            name: m.name.to_string(),
+            up_sql: Some(m.up_sql.to_string()),
+            down_sql: Some(m.down_sql.to_string()),
+            hash: Some(m.hash.to_string()),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct Migration {
     pub name: String,

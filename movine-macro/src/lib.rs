@@ -4,31 +4,20 @@ use quote::quote;
 
 #[proc_macro]
 pub fn embed_migrations(input: TokenStream) -> TokenStream {
-    let migration_dir = syn::parse_macro_input!(input as syn::LitStr);
+    let ident = syn::parse_macro_input!(input as syn::Ident);
 
-    let migration_dir = migration_dir.value();
-    let file_handler = movine_core::file_handler::FileHandler::new(&migration_dir);
-    let local_migrations = file_handler.load_local_migrations().expect(&format!("Unable to find migration dir: {migration_dir}"));
+    let file_handler = movine_core::file_handler::FileHandler::new("./migrations"); // TODO: load from config
+    let local_migrations = file_handler.load_local_migrations().expect(&format!("Unable to find migration dir"));
 
     let migrations: Vec<_> = local_migrations
         .into_iter()
         .map(|migration| {
             let Migration { name, up_sql, down_sql, hash } = migration;
-            let name = quote!(::std::string::String::from(#name));
-            let up_sql = match up_sql {
-                None => quote!(::std::option::Option::None),
-                Some(s) => quote!(::std::option::Option::Some(::std::string::String::from(#s))),
-            };
-            let down_sql = match down_sql {
-                None => quote!(::std::option::Option::None),
-                Some(s) => quote!(::std::option::Option::Some(::std::string::String::from(#s))),
-            };
-            let hash = match hash {
-                None => quote!(::std::option::Option::None),
-                Some(s) => quote!(::std::option::Option::Some(::std::string::String::from(#s))),
-            };
+            let up_sql = up_sql.expect("Migration missing up_sql");
+            let down_sql = down_sql.expect("Migration missing down_sql");
+            let hash = hash.expect("Migration missing hash");
             quote! {
-                ::movine::Migration {
+                ::movine::EmbeddedMigration {
                     name: #name,
                     up_sql: #up_sql,
                     down_sql: #down_sql,
@@ -38,5 +27,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    quote! { vec![ #(#migrations),* ] }.into()
+    let count = migrations.len();
+
+    quote! { const #ident: [::movine::EmbeddedMigration; #count] = [ #(#migrations),* ]; }.into()
 }
