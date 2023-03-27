@@ -1,7 +1,7 @@
 use crate::display;
 use crate::errors::Result;
 use crate::migration::Migration;
-use crate::plan_builder::{Dir, Step};
+use crate::plan_builder::{Dir, Plan, Step};
 
 mod postgres;
 mod sqlite;
@@ -13,7 +13,7 @@ pub trait DbAdaptor {
     fn run_up_migration(&mut self, migration: &Migration) -> Result<()>;
     fn run_down_migration(&mut self, migration: &Migration) -> Result<()>;
 
-    fn run_migration_plan(&mut self, plan: &[Step]) -> Result<()> {
+    fn run_migration_plan(&mut self, plan: &Plan) -> Result<()> {
         for step in plan {
             display::print_step(&step);
             let Step(dir, migration) = step;
@@ -53,7 +53,7 @@ impl<T: DbAdaptor + ?Sized> DbAdaptor for &'_ mut T {
         (**self).run_down_migration(migration)
     }
 
-    fn run_migration_plan(&mut self, plan: &[Step]) -> Result<()> {
+    fn run_migration_plan(&mut self, plan: &Plan) -> Result<()> {
         (**self).run_migration_plan(plan)
     }
 }
@@ -79,7 +79,7 @@ impl<T: DbAdaptor + ?Sized> DbAdaptor for Box<T> {
         (**self).run_down_migration(migration)
     }
 
-    fn run_migration_plan(&mut self, plan: &[Step]) -> Result<()> {
+    fn run_migration_plan(&mut self, plan: &Plan) -> Result<()> {
         (**self).run_migration_plan(plan)
     }
 }

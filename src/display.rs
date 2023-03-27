@@ -1,5 +1,5 @@
 use crate::match_maker::Matching;
-use crate::plan_builder::{Dir, Step};
+use crate::plan_builder::{Dir, Plan, Step};
 use ansi_term::Color;
 use std::io::{self, Write};
 
@@ -36,8 +36,8 @@ pub fn print_status(matchings: &[Matching]) {
     }
 }
 
-pub fn print_plan(plan: &[Step]) {
-    for step in plan.iter() {
+pub fn print_plan(plan: &Plan) {
+    for step in plan {
         print_step(step);
     }
 }

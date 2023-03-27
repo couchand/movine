@@ -2,7 +2,28 @@ use crate::errors::{Error, Result};
 use crate::match_maker::{self, Matching};
 use crate::migration::Migration;
 
-pub type Plan<'a> = Vec<Step<'a>>;
+#[derive(Debug, Clone)]
+pub struct Plan<'a>(Vec<Step<'a>>);
+
+impl<'a, T> PartialEq<[T]> for Plan<'a> where Step<'a>: PartialEq<T> {
+    fn eq(&self, other: &[T]) -> bool {
+        self.0 == other
+    }
+}
+
+impl<'a, T, const LEN: usize> PartialEq<[T; LEN]> for Plan<'a> where Step<'a>: PartialEq<T> {
+    fn eq(&self, other: &[T; LEN]) -> bool {
+        self.0 == other
+    }
+}
+
+impl<'a, 'b: 'a> IntoIterator for &'a Plan<'b> {
+    type Item = &'a Step<'b>;
+    type IntoIter = std::slice::Iter<'a, Step<'b>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Step<'a>(pub Dir, pub &'a Migration);
@@ -139,11 +160,11 @@ impl<'a> PlanBuilder2<'a> {
             return Err(Error::DirtyMigrations);
         }
 
-        Ok(plan)
+        Ok(Plan(plan))
     }
 
     pub fn down(self) -> Result<Plan<'a>> {
-        let mut plan: Plan<'a> = Vec::new();
+        let mut plan = Vec::new();
 
         // Note: get_matches() returns the migrations in date-order.
         // We want the most recently run, so we have to reverse the order.
@@ -175,7 +196,7 @@ impl<'a> PlanBuilder2<'a> {
             }
         }
 
-        Ok(plan)
+        Ok(Plan(plan))
     }
 
     pub fn fix(self) -> Result<Plan<'a>> {
@@ -220,14 +241,14 @@ impl<'a> PlanBuilder2<'a> {
             }
         }
 
-        let mut plan: Plan<'a> = rollback_plan_rev.drain(..).rev().collect();
+        let mut plan: Vec<_> = rollback_plan_rev.drain(..).rev().collect();
         plan.append(&mut rollup_plan);
-        Ok(plan)
+        Ok(Plan(plan))
     }
 
     pub fn redo(self) -> Result<Plan<'a>> {
-        let mut rollback_plan: Plan<'a> = Vec::new();
-        let mut rollup_plan_rev: Plan<'a> = Vec::new();
+        let mut rollback_plan = Vec::new();
+        let mut rollup_plan_rev = Vec::new();
 
         // Note: get_matches() returns the migrations in date-order.
         // We want the most recently run, so we have to reverse the order.
@@ -260,10 +281,10 @@ impl<'a> PlanBuilder2<'a> {
             }
         }
 
-        let mut rollup_plan: Plan<'a> = rollup_plan_rev.drain(..).rev().collect();
+        let mut rollup_plan: Vec<_> = rollup_plan_rev.drain(..).rev().collect();
         let mut plan = rollback_plan;
         plan.append(&mut rollup_plan);
-        Ok(plan)
+        Ok(Plan(plan))
     }
 
     pub fn status(self) -> Result<Vec<Matching<'a>>> {
