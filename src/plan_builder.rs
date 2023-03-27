@@ -2,10 +2,10 @@ use crate::errors::{Error, Result};
 use crate::match_maker::{self, Matching};
 use crate::migration::Migration;
 
-pub type Plan<'a> = Vec<(Step, &'a Migration)>;
+pub type Plan<'a> = Vec<(Dir, &'a Migration)>;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum Step {
+pub enum Dir {
     Up,
     Down,
 }
@@ -114,7 +114,7 @@ impl<'a> PlanBuilder2<'a> {
                         }
                     }
 
-                    let step = (Step::Up, x);
+                    let step = (Dir::Up, x);
                     plan.push(step);
                 }
                 _ => {
@@ -145,11 +145,11 @@ impl<'a> PlanBuilder2<'a> {
                         continue;
                     }
 
-                    plan.push((Step::Down, x));
+                    plan.push((Dir::Down, x));
                 }
                 Matching::Applied(_) | Matching::Variant(_, _) => {
                     if m.is_reversable() {
-                        plan.push((Step::Down, m.get_best_down_migration()));
+                        plan.push((Dir::Down, m.get_best_down_migration()));
                     } else if !self.ignore_unreversable {
                         return Err(Error::UnrollbackableMigration);
                     }
@@ -178,7 +178,7 @@ impl<'a> PlanBuilder2<'a> {
                 Matching::Divergent(x) => {
                     bad_migration_found = true;
                     if m.is_reversable() {
-                        rollback_plan_rev.push((Step::Down, x));
+                        rollback_plan_rev.push((Dir::Down, x));
                     } else {
                         return Err(Error::UnrollbackableMigration);
                     }
@@ -188,8 +188,8 @@ impl<'a> PlanBuilder2<'a> {
                     let down = m.get_best_down_migration();
                     let up = m.get_local_migration().unwrap();
                     if m.is_reversable() {
-                        rollback_plan_rev.push((Step::Down, down));
-                        rollup_plan.push((Step::Up, up));
+                        rollback_plan_rev.push((Dir::Down, down));
+                        rollup_plan.push((Dir::Up, up));
                     } else {
                         return Err(Error::UnrollbackableMigration);
                     }
@@ -197,8 +197,8 @@ impl<'a> PlanBuilder2<'a> {
                 Matching::Applied(x) => {
                     if bad_migration_found {
                         if m.is_reversable() {
-                            rollback_plan_rev.push((Step::Down, x));
-                            rollup_plan.push((Step::Up, x));
+                            rollback_plan_rev.push((Dir::Down, x));
+                            rollup_plan.push((Dir::Up, x));
                         } else {
                             return Err(Error::UnrollbackableMigration);
                         }
@@ -206,7 +206,7 @@ impl<'a> PlanBuilder2<'a> {
                 }
                 Matching::Pending(x) => {
                     bad_migration_found = true;
-                    rollup_plan.push((Step::Up, x));
+                    rollup_plan.push((Dir::Up, x));
                 }
             }
         }
@@ -233,8 +233,8 @@ impl<'a> PlanBuilder2<'a> {
                 }
                 Matching::Applied(_) | Matching::Variant(_, _) => {
                     if m.is_reversable() {
-                        rollback_plan.push((Step::Down, m.get_best_down_migration()));
-                        rollup_plan_rev.push((Step::Up, m.get_local_migration().unwrap()));
+                        rollback_plan.push((Dir::Down, m.get_best_down_migration()));
+                        rollup_plan_rev.push((Dir::Up, m.get_local_migration().unwrap()));
                     } else if !self.ignore_unreversable {
                         return Err(Error::UnrollbackableMigration);
                     }
@@ -301,7 +301,7 @@ mod tests {
             .unwrap()
             .up()
             .unwrap();
-        assert_eq!(plan, [(Step::Up, &local[0]), (Step::Up, &local[1])])
+        assert_eq!(plan, [(Dir::Up, &local[0]), (Dir::Up, &local[1])])
     }
 
     #[test]
@@ -316,7 +316,7 @@ mod tests {
             .unwrap()
             .up()
             .unwrap();
-        assert_eq!(plan, [(Step::Up, &local[1])])
+        assert_eq!(plan, [(Dir::Up, &local[1])])
     }
 
     #[test]
@@ -348,7 +348,7 @@ mod tests {
             .unwrap()
             .down()
             .unwrap();
-        assert_eq!(plan, [(Step::Down, &db[1])])
+        assert_eq!(plan, [(Dir::Down, &db[1])])
     }
 
     #[test]
@@ -364,7 +364,7 @@ mod tests {
             .unwrap()
             .down()
             .unwrap();
-        assert_eq!(plan, [(Step::Down, &local[0])])
+        assert_eq!(plan, [(Dir::Down, &local[0])])
     }
 
     #[test]
@@ -391,11 +391,11 @@ mod tests {
         assert_eq!(
             plan,
             [
-                (Step::Down, &db[3]),
-                (Step::Down, &local[2]),
-                (Step::Down, &local[1]),
-                (Step::Up, &local[1]),
-                (Step::Up, &local[2]),
+                (Dir::Down, &db[3]),
+                (Dir::Down, &local[2]),
+                (Dir::Down, &local[1]),
+                (Dir::Up, &local[1]),
+                (Dir::Up, &local[2]),
             ]
         )
     }
@@ -423,10 +423,10 @@ mod tests {
         assert_eq!(
             plan,
             [
-                (Step::Down, &local[2]),
-                (Step::Down, &local[1]),
-                (Step::Up, &local[1]),
-                (Step::Up, &local[2]),
+                (Dir::Down, &local[2]),
+                (Dir::Down, &local[1]),
+                (Dir::Up, &local[1]),
+                (Dir::Up, &local[2]),
             ]
         )
     }
@@ -457,14 +457,14 @@ mod tests {
             .fix()
             .unwrap();
         let expected = [
-            (Step::Down, &local[4]),
-            (Step::Down, &db[3]),
-            (Step::Down, &local[2]),
-            (Step::Down, &local[1]),
-            (Step::Up, &local[1]),
-            (Step::Up, &local[2]),
-            (Step::Up, &local[3]),
-            (Step::Up, &local[4]),
+            (Dir::Down, &local[4]),
+            (Dir::Down, &db[3]),
+            (Dir::Down, &local[2]),
+            (Dir::Down, &local[1]),
+            (Dir::Up, &local[1]),
+            (Dir::Up, &local[2]),
+            (Dir::Up, &local[3]),
+            (Dir::Up, &local[4]),
         ];
         assert_eq!(actual, expected)
     }
@@ -481,7 +481,7 @@ mod tests {
             .unwrap()
             .fix()
             .unwrap();
-        let expected = [(Step::Up, &local[1])];
+        let expected = [(Dir::Up, &local[1])];
         assert_eq!(actual, expected)
     }
 
@@ -532,10 +532,10 @@ mod tests {
         assert_eq!(
             plan,
             [
-                (Step::Down, &local[2]),
-                (Step::Down, &local[1]),
-                (Step::Up, &local[1]),
-                (Step::Up, &local[2]),
+                (Dir::Down, &local[2]),
+                (Dir::Down, &local[1]),
+                (Dir::Up, &local[1]),
+                (Dir::Up, &local[2]),
             ]
         )
     }
@@ -561,7 +561,7 @@ mod tests {
             .unwrap()
             .redo()
             .unwrap();
-        assert_eq!(plan, [(Step::Down, &local[2]), (Step::Up, &local[2]),])
+        assert_eq!(plan, [(Dir::Down, &local[2]), (Dir::Up, &local[2]),])
     }
 
     #[test]
@@ -588,10 +588,10 @@ mod tests {
         assert_eq!(
             plan,
             [
-                (Step::Down, &local[2]),
-                (Step::Down, &local[1]),
-                (Step::Up, &local[1]),
-                (Step::Up, &local[2]),
+                (Dir::Down, &local[2]),
+                (Dir::Down, &local[1]),
+                (Dir::Up, &local[1]),
+                (Dir::Up, &local[2]),
             ]
         )
     }

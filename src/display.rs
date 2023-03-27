@@ -1,6 +1,6 @@
 use crate::match_maker::Matching;
 use crate::migration::Migration;
-use crate::plan_builder::Step;
+use crate::plan_builder::Dir;
 use ansi_term::Color;
 use std::io::{self, Write};
 
@@ -37,15 +37,15 @@ pub fn print_status(matchings: &[Matching]) {
     }
 }
 
-pub fn print_plan(plan: &[(Step, &Migration)]) {
+pub fn print_plan(plan: &[(Dir, &Migration)]) {
     for step in plan.iter() {
         print_step(step);
     }
 }
 
-pub fn print_step((step, migration): &(Step, &Migration)) {
-    use Step::*;
-    if migration.is_reversable() || step == &Step::Up {
+pub fn print_step((step, migration): &(Dir, &Migration)) {
+    use Dir::*;
+    if migration.is_reversable() || step == &Dir::Up {
         let step = match step {
             // Add spaces in front to make them all the same length
             Up => "  Up",

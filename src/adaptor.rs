@@ -1,7 +1,7 @@
 use crate::display;
 use crate::errors::Result;
 use crate::migration::Migration;
-use crate::plan_builder::Step;
+use crate::plan_builder::Dir;
 
 mod postgres;
 mod sqlite;
@@ -13,14 +13,14 @@ pub trait DbAdaptor {
     fn run_up_migration(&mut self, migration: &Migration) -> Result<()>;
     fn run_down_migration(&mut self, migration: &Migration) -> Result<()>;
 
-    fn run_migration_plan(&mut self, plan: &[(Step, &Migration)]) -> Result<()> {
+    fn run_migration_plan(&mut self, plan: &[(Dir, &Migration)]) -> Result<()> {
         for (step, migration) in plan {
             display::print_step(&(*step, migration));
             match step {
-                Step::Up => {
+                Dir::Up => {
                     self.run_up_migration(&migration)?;
                 }
-                Step::Down => {
+                Dir::Down => {
                     if migration.is_reversable() {
                         self.run_down_migration(&migration)?;
                     }
@@ -52,7 +52,7 @@ impl<T: DbAdaptor + ?Sized> DbAdaptor for &'_ mut T {
         (**self).run_down_migration(migration)
     }
 
-    fn run_migration_plan(&mut self, plan: &[(Step, &Migration)]) -> Result<()> {
+    fn run_migration_plan(&mut self, plan: &[(Dir, &Migration)]) -> Result<()> {
         (**self).run_migration_plan(plan)
     }
 }
@@ -78,7 +78,7 @@ impl<T: DbAdaptor + ?Sized> DbAdaptor for Box<T> {
         (**self).run_down_migration(migration)
     }
 
-    fn run_migration_plan(&mut self, plan: &[(Step, &Migration)]) -> Result<()> {
+    fn run_migration_plan(&mut self, plan: &[(Dir, &Migration)]) -> Result<()> {
         (**self).run_migration_plan(plan)
     }
 }
