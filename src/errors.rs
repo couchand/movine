@@ -137,5 +137,15 @@ impl From<rustls::TLSError> for Error {
     }
 }
 
+impl From<movine_core::Error> for Error {
+    fn from(error: movine_core::Error) -> Self {
+        match error {
+            movine_core::Error::Io(io) => Error::IoError(io),
+            movine_core::Error::BadMigration => Error::BadMigration,
+            movine_core::Error::MigrationDirNotFound => Error::MigrationDirNotFound,
+        }
+    }
+}
+
 // Implements std::Error for ease of use outside of Movine
 impl StdError for Error {}

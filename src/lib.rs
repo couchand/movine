@@ -32,26 +32,25 @@
 //! ```
 use chrono::prelude::*;
 
-#[macro_use]
-extern crate log;
+use movine_core::{file_handler, migration};
 
 pub mod adaptor;
 pub mod config;
 mod display;
 pub mod errors;
-mod file_handler;
 mod match_maker;
-mod migration;
 mod plan_builder;
 
 pub use adaptor::DbAdaptor;
 pub use config::Config;
-use errors::{Error, Result};
+use errors::Result;
 use file_handler::FileHandler;
 use migration::MigrationBuilder;
 pub use plan_builder::{PlanBuilder, PlanBuilder2};
 pub use migration::Migration;
 pub use match_maker::Matching;
+
+pub use movine_macro::embed_migrations;
 
 pub struct Movine<T> {
     adaptor: T,
@@ -79,7 +78,14 @@ impl<T: DbAdaptor> Movine2<T> {
         Ok(Movine2 { movine, local_migrations, db_migrations })
     }
 
-    pub fn plan_builder(&self) -> PlanBuilder {
+    pub fn new_with_local(adaptor: T, local_migrations: Vec<Migration>) -> Result<Self> {
+        let mut movine = Movine::new(adaptor);
+        let db_migrations = movine.adaptor.load_migrations()?;
+        let movine = std::cell::RefCell::from(movine);
+        Ok(Movine2 { movine, local_migrations, db_migrations })
+    }
+
+    pub fn plan_builder(&self) -> Result<PlanBuilder2> {
         PlanBuilder::new()
             .local_migrations(&self.local_migrations)
             .db_migrations(&self.db_migrations)
@@ -87,6 +93,7 @@ impl<T: DbAdaptor> Movine2<T> {
             .set_strict(self.movine.borrow().strict)
             .set_ignore_divergent(self.movine.borrow().ignore_divergent)
             .set_ignore_unreversable(self.movine.borrow().ignore_unreversable)
+            .build()
     }
 
     pub fn execute(&self, plan: &plan_builder::Plan) -> Result<()> {
@@ -152,7 +159,7 @@ impl<T: DbAdaptor> Movine<T> {
 
         match file_handler.write_migration(&init_migration) {
             Ok(_) => {}
-            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(movine_core::Error::Io(e)) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             x => x?,
         }
 
@@ -175,7 +182,8 @@ impl<T: DbAdaptor> Movine<T> {
             .name(name)
             .date(Utc::now())
             .build()?;
-        file_handler.write_migration(&new_migration)
+        file_handler.write_migration(&new_migration)?;
+        Ok(())
     }
 
     pub fn status(&mut self) -> Result<()> {

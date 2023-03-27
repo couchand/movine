@@ -1,4 +1,4 @@
-use crate::errors::{Error, Result};
+use crate::{Error, Result};
 use crate::migration::{Migration, MigrationBuilder};
 use std::fs;
 use std::fs::File;

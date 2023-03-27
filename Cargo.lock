@@ -638,6 +638,8 @@ dependencies = [
  "envy",
  "libsqlite3-sys",
  "log",
+ "movine-core",
+ "movine-macro",
  "native-tls",
  "postgres",
  "postgres-native-tls",
@@ -647,6 +649,23 @@ dependencies = [
  "structopt",
  "tokio-postgres-rustls",
  "toml",
+]
+
+[[package]]
+name = "movine-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "log",
+]
+
+[[package]]
+name = "movine-macro"
+version = "0.1.0"
+dependencies = [
+ "movine-core",
+ "quote",
+ "syn 2.0.10",
 ]
 
 [[package]]

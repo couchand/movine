@@ -1,4 +1,6 @@
 /target
+/movine-core/target
+/movine-macro/target
 **/*.rs.bk
 notes.md
 testing/
