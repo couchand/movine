@@ -39,6 +39,8 @@ pub enum Error {
     RustlsError(rustls::TLSError),
     #[cfg(feature = "with-rustls")]
     RustlsPemfileError,
+    #[cfg(any(feature = "with-native-tls", feature = "with-rustls"))]
+    SslClientConfig,
 }
 
 impl fmt::Debug for Error {
@@ -72,6 +74,8 @@ impl fmt::Debug for Error {
             RustlsError(e) => write!(f, "Error in TLS: {}", e),
             #[cfg(feature = "with-rustls")]
             RustlsPemfileError => write!(f, "Error in TLS: could not add PEM file to store"),
+            #[cfg(any(feature = "with-native-tls", feature = "with-rustls"))]
+            SslClientConfig => write!(f, "Error in TLS: must specify both sslcert and sslkey"),
             SqliteParamError { .. } => write!(f, "Unable to load Sqlite params. Make sure you have `file` defined in your `movine.toml` or SQLITE_FILE defined as an environment variable"),
             PgParamError {
                 user, password, database, host, port

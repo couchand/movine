@@ -15,6 +15,8 @@ pub struct PostgresParams {
 #[derive(Debug, Clone)]
 pub struct SslConfig {
     pub sslrootcert: Option<String>,
+    pub sslcert: Option<String>,
+    pub sslkey: Option<String>,
 }
 
 impl TryFrom<&[&RawPostgresParams]> for PostgresParams {
@@ -30,6 +32,8 @@ impl TryFrom<&[&RawPostgresParams]> for PostgresParams {
                 acc.database = x.database.to_owned().or(acc.database);
                 acc.port = x.port.to_owned().or(acc.port);
                 acc.sslrootcert = x.sslrootcert.to_owned().or(acc.sslrootcert);
+                acc.sslcert = x.sslcert.to_owned().or(acc.sslcert);
+                acc.sslkey = x.sslkey.to_owned().or(acc.sslkey);
                 acc
             });
 
@@ -41,10 +45,15 @@ impl TryFrom<&[&RawPostgresParams]> for PostgresParams {
                 host: Some(host),
                 port: Some(port),
                 sslrootcert,
+                sslcert,
+                sslkey,
             } => {
-                let sslconfig = match sslrootcert {
-                    None => None,
-                    sslrootcert => Some(SslConfig { sslrootcert }),
+                let sslconfig = match (sslrootcert, sslcert, sslkey) {
+                    (None, None, None) => None,
+                    (_, Some(_), None) | (_, None, Some(_)) => {
+                        return Err(Error::SslClientConfig);
+                    }
+                    (sslrootcert, sslcert, sslkey) => Some(SslConfig { sslrootcert, sslcert, sslkey }),
                 };
                 Ok(Self {
                     user,
@@ -74,6 +83,8 @@ pub struct RawPostgresParams {
     pub database: Option<String>,
     pub port: Option<i32>,
     pub sslrootcert: Option<String>,
+    pub sslcert: Option<String>,
+    pub sslkey: Option<String>,
 }
 
 impl RawPostgresParams {
@@ -100,6 +111,8 @@ impl Default for RawPostgresParams {
             database: None,
             port: Some(5432),
             sslrootcert: None,
+            sslcert: None,
+            sslkey: None,
         }
     }
 }

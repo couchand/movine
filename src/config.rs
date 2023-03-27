@@ -2,7 +2,7 @@ use crate::errors::{Error, Result};
 use crate::DbAdaptor;
 use log::debug;
 #[cfg(feature = "with-native-tls")]
-use native_tls::{Certificate, TlsConnector};
+use native_tls::{Certificate, Identity, TlsConnector};
 #[cfg(feature = "with-native-tls")]
 use postgres_native_tls::MakeTlsConnector;
 #[cfg(feature = "with-rustls")]
@@ -223,6 +223,12 @@ fn build_tls_connection(url: &str, conf: &postgres_params::SslConfig) -> Result<
         builder.add_root_certificate(cert);
     }
 
+    if let (Some(client_certs), Some(client_key)) = (&conf.sslcert, &conf.sslkey) {
+        let client_certs = fs::read(client_certs)?;
+        let client_key = fs::read(client_key)?;
+        builder.identity(Identity::from_pkcs8(&client_certs, &client_key)?);
+    }
+
     let connector = builder.build()?;
     let tls = MakeTlsConnector::new(connector);
     Ok(postgres::Client::connect(&url, tls)?)
@@ -241,6 +247,20 @@ fn build_tls_connection(url: &str, conf: &postgres_params::SslConfig) -> Result<
             .root_store
             .add_pem_file(&mut reader)
             .map_err(|_| Error::RustlsPemfileError)?;
+    }
+    if let (Some(client_certs), Some(client_key)) = (&conf.sslcert, &conf.sslkey) {
+        let f = File::open(client_certs)?;
+        let mut reader = BufReader::new(f);
+        let client_certs = rustls::internal::pemfile::certs(&mut reader)
+            .map_err(|_| Error::RustlsPemfileError)?;
+        let f = File::open(client_key)?;
+        let mut reader = BufReader::new(f);
+        let client_key = rustls::internal::pemfile::pkcs8_private_keys(&mut reader)
+            .map_err(|_| Error::RustlsPemfileError)?
+            .into_iter()
+            .next()
+            .ok_or(Error::RustlsPemfileError)?;
+        config.set_single_client_cert(client_certs, client_key)?;
     }
 
     let tls = MakeRustlsConnect::new(config);
