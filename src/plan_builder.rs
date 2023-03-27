@@ -19,6 +19,14 @@ pub struct PlanBuilder<'a> {
     ignore_unreversable: bool,
 }
 
+pub struct PlanBuilder2<'a> {
+    matches: Vec<Matching<'a>>,
+    count: Option<usize>,
+    strict: bool,
+    ignore_divergent: bool,
+    ignore_unreversable: bool,
+}
+
 impl<'a> PlanBuilder<'a> {
     pub fn new() -> Self {
         Self {
@@ -61,13 +69,42 @@ impl<'a> PlanBuilder<'a> {
         self
     }
 
+    pub fn build(self) -> Result<PlanBuilder2<'a>> {
+        if let (Some(local_migrations), Some(db_migrations)) =
+            (self.local_migrations, self.db_migrations)
+        {
+            let mut matches = match_maker::find_matches(local_migrations, db_migrations);
+            matches.sort();
+            let count = self.count;
+            let strict = self.strict;
+            let ignore_divergent = self.ignore_divergent;
+            let ignore_unreversable = self.ignore_unreversable;
+            Ok(PlanBuilder2 { matches, count, strict, ignore_divergent, ignore_unreversable  })
+        } else {
+            Err(Error::Unknown)
+        }
+    }
+}
+
+impl<'a> PlanBuilder2<'a> {
+    pub fn any_divergent(&self) -> bool {
+        self.matches.iter().any(|m| matches!(m, Matching::Divergent(_)))
+    }
+
+    pub fn any_variant(&self) -> bool {
+        self.matches.iter().any(|m| matches!(m, Matching::Variant(_, _)))
+    }
+
+    pub fn safe_to_migrate(&self) -> bool {
+        !self.any_divergent() && !self.any_variant()
+    }
+
     pub fn up(self) -> Result<Plan<'a>> {
         let mut dirty = false;
         let mut pending_found = false;
         let mut plan = Vec::new();
 
-        let matches = self.get_matches()?;
-        for m in matches {
+        for m in self.matches {
             match m {
                 Matching::Pending(x) => {
                     pending_found = true;
@@ -98,11 +135,10 @@ impl<'a> PlanBuilder<'a> {
 
     pub fn down(self) -> Result<Plan<'a>> {
         let mut plan: Plan<'a> = Vec::new();
-        let matches = self.get_matches()?;
 
         // Note: get_matches() returns the migrations in date-order.
         // We want the most recently run, so we have to reverse the order.
-        for m in matches.iter().rev() {
+        for m in self.matches.iter().rev() {
             match m {
                 Matching::Divergent(x) => {
                     if self.ignore_divergent {
@@ -134,12 +170,10 @@ impl<'a> PlanBuilder<'a> {
     }
 
     pub fn fix(self) -> Result<Plan<'a>> {
-        let matches = self.get_matches()?;
-
         let mut bad_migration_found = false;
         let mut rollback_plan_rev = Vec::new();
         let mut rollup_plan = Vec::new();
-        for m in matches {
+        for m in self.matches {
             match m {
                 Matching::Divergent(x) => {
                     bad_migration_found = true;
@@ -183,13 +217,12 @@ impl<'a> PlanBuilder<'a> {
     }
 
     pub fn redo(self) -> Result<Plan<'a>> {
-        let matches = self.get_matches()?;
         let mut rollback_plan: Plan<'a> = Vec::new();
         let mut rollup_plan_rev: Plan<'a> = Vec::new();
 
         // Note: get_matches() returns the migrations in date-order.
         // We want the most recently run, so we have to reverse the order.
-        for m in matches.iter().rev() {
+        for m in self.matches.iter().rev() {
             match m {
                 Matching::Divergent(_) => {
                     if self.ignore_divergent {
@@ -225,19 +258,7 @@ impl<'a> PlanBuilder<'a> {
     }
 
     pub fn status(self) -> Result<Vec<Matching<'a>>> {
-        self.get_matches()
-    }
-
-    fn get_matches(&self) -> Result<Vec<Matching<'a>>> {
-        if let (Some(local_migrations), Some(db_migrations)) =
-            (self.local_migrations, self.db_migrations)
-        {
-            let mut matches = match_maker::find_matches(local_migrations, db_migrations);
-            matches.sort();
-            Ok(matches)
-        } else {
-            Err(Error::Unknown)
-        }
+        Ok(self.matches)
     }
 }
 

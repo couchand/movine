@@ -49,7 +49,9 @@ pub use config::Config;
 use errors::{Error, Result};
 use file_handler::FileHandler;
 use migration::MigrationBuilder;
-use plan_builder::PlanBuilder;
+pub use plan_builder::{PlanBuilder, PlanBuilder2};
+pub use migration::Migration;
+pub use match_maker::Matching;
 
 pub struct Movine<T> {
     adaptor: T,
@@ -59,6 +61,37 @@ pub struct Movine<T> {
     ignore_divergent: bool,
     ignore_unreversable: bool,
     strict: bool,
+}
+
+pub struct Movine2<T> {
+    movine: std::cell::RefCell<Movine<T>>,
+    local_migrations: Vec<migration::Migration>,
+    db_migrations: Vec<migration::Migration>,
+}
+
+impl<T: DbAdaptor> Movine2<T> {
+    pub fn new(adaptor: T) -> Result<Self> {
+        let mut movine = Movine::new(adaptor);
+        let file_handler = FileHandler::new(&movine.migration_dir);
+        let local_migrations = file_handler.load_local_migrations()?;
+        let db_migrations = movine.adaptor.load_migrations()?;
+        let movine = std::cell::RefCell::from(movine);
+        Ok(Movine2 { movine, local_migrations, db_migrations })
+    }
+
+    pub fn plan_builder(&self) -> PlanBuilder {
+        PlanBuilder::new()
+            .local_migrations(&self.local_migrations)
+            .db_migrations(&self.db_migrations)
+            .count(self.movine.borrow().number)
+            .set_strict(self.movine.borrow().strict)
+            .set_ignore_divergent(self.movine.borrow().ignore_divergent)
+            .set_ignore_unreversable(self.movine.borrow().ignore_unreversable)
+    }
+
+    pub fn execute(&self, plan: &plan_builder::Plan) -> Result<()> {
+        self.movine.borrow_mut().adaptor.run_migration_plan(plan)
+    }
 }
 
 impl<T: DbAdaptor> Movine<T> {
@@ -131,6 +164,7 @@ impl<T: DbAdaptor> Movine<T> {
             .local_migrations(&local_migrations)
             .db_migrations(&db_migrations)
             .count(Some(1)) // Just want to run a single migration (the init one)
+            .build()?
             .up()?;
         self.adaptor.run_migration_plan(&plan)
     }
@@ -152,6 +186,7 @@ impl<T: DbAdaptor> Movine<T> {
         let status = PlanBuilder::new()
             .local_migrations(&local_migrations)
             .db_migrations(&db_migrations)
+            .build()?
             .status()?;
 
         display::print_status(&status);
@@ -168,6 +203,7 @@ impl<T: DbAdaptor> Movine<T> {
             .db_migrations(&db_migrations)
             .count(self.number)
             .set_strict(self.strict)
+            .build()?
             .up()?;
 
         if self.show_plan {
@@ -189,6 +225,7 @@ impl<T: DbAdaptor> Movine<T> {
             .count(self.number)
             .set_ignore_divergent(self.ignore_divergent)
             .set_ignore_unreversable(self.ignore_unreversable)
+            .build()?
             .down()?;
 
         if self.show_plan {
@@ -207,6 +244,7 @@ impl<T: DbAdaptor> Movine<T> {
         let plan = PlanBuilder::new()
             .local_migrations(&local_migrations)
             .db_migrations(&db_migrations)
+            .build()?
             .fix()?;
 
         if self.show_plan {
@@ -228,6 +266,7 @@ impl<T: DbAdaptor> Movine<T> {
             .count(self.number)
             .set_ignore_divergent(self.ignore_divergent)
             .set_ignore_unreversable(self.ignore_unreversable)
+            .build()?
             .redo()?;
 
         if self.show_plan {
