@@ -9,6 +9,11 @@ pub struct PostgresParams {
     pub host: String,
     pub database: String,
     pub port: i32,
+    pub sslconfig: Option<SslConfig>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SslConfig {
     pub sslrootcert: Option<String>,
 }
 
@@ -36,14 +41,20 @@ impl TryFrom<&[&RawPostgresParams]> for PostgresParams {
                 host: Some(host),
                 port: Some(port),
                 sslrootcert,
-            } => Ok(Self {
-                user,
-                password,
-                host,
-                database,
-                port,
-                sslrootcert,
-            }),
+            } => {
+                let sslconfig = match sslrootcert {
+                    None => None,
+                    sslrootcert => Some(SslConfig { sslrootcert }),
+                };
+                Ok(Self {
+                    user,
+                    password,
+                    host,
+                    database,
+                    port,
+                    sslconfig,
+                })
+            }
             p => Err(Error::PgParamError {
                 user: p.user.is_some(),
                 password: p.password.is_some(),

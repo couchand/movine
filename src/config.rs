@@ -159,8 +159,8 @@ impl Config {
                     database = params.database,
                 ),
             };
-            let conn = if let Some(cert) = &params.sslrootcert {
-                build_tls_connection(&url, cert)?
+            let conn = if let Some(config) = &params.sslconfig {
+                build_tls_connection(&url, config)?
             } else {
                 postgres::Client::connect(&url, postgres::NoTls)?
             };
@@ -214,25 +214,34 @@ impl RawConfig {
 }
 
 #[cfg(feature = "with-native-tls")]
-fn build_tls_connection(url: &str, certificate: &str) -> Result<postgres::Client> {
-    let cert = fs::read(certificate)?;
-    let cert = Certificate::from_pem(&cert)?;
-    let connector = TlsConnector::builder().add_root_certificate(cert).build()?;
+fn build_tls_connection(url: &str, conf: &postgres_params::SslConfig) -> Result<postgres::Client> {
+    let mut builder = TlsConnector::builder();
+
+    if let Some(certificate) = &conf.sslrootcert {
+        let cert = fs::read(certificate)?;
+        let cert = Certificate::from_pem(&cert)?;
+        builder.add_root_certificate(cert);
+    }
+
+    let connector = builder.build()?;
     let tls = MakeTlsConnector::new(connector);
     Ok(postgres::Client::connect(&url, tls)?)
 }
 
 #[cfg(feature = "with-rustls")]
-fn build_tls_connection(url: &str, certificate: &str) -> Result<postgres::Client> {
+fn build_tls_connection(url: &str, conf: &postgres_params::SslConfig) -> Result<postgres::Client> {
     use std::io::BufReader;
 
-    let f = File::open(certificate)?;
-    let mut reader = BufReader::new(f);
     let mut config = ClientConfig::new();
-    config
-        .root_store
-        .add_pem_file(&mut reader)
-        .map_err(|_| Error::RustlsPemfileError)?;
+
+    if let Some(certificate) = &conf.sslrootcert {
+        let f = File::open(certificate)?;
+        let mut reader = BufReader::new(f);
+        config
+            .root_store
+            .add_pem_file(&mut reader)
+            .map_err(|_| Error::RustlsPemfileError)?;
+    }
 
     let tls = MakeRustlsConnect::new(config);
     Ok(postgres::Client::connect(&url, tls)?)
