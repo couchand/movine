@@ -2,7 +2,16 @@ use crate::errors::{Error, Result};
 use crate::match_maker::{self, Matching};
 use crate::migration::Migration;
 
-pub type Plan<'a> = Vec<(Dir, &'a Migration)>;
+pub type Plan<'a> = Vec<Step<'a>>;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Step<'a>(pub Dir, pub &'a Migration);
+
+impl<'a> PartialEq<(Dir, &Migration)> for Step<'a> {
+    fn eq(&self, other: &(Dir, &Migration)) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Dir {
@@ -114,7 +123,7 @@ impl<'a> PlanBuilder2<'a> {
                         }
                     }
 
-                    let step = (Dir::Up, x);
+                    let step = Step(Dir::Up, x);
                     plan.push(step);
                 }
                 _ => {
@@ -145,11 +154,11 @@ impl<'a> PlanBuilder2<'a> {
                         continue;
                     }
 
-                    plan.push((Dir::Down, x));
+                    plan.push(Step(Dir::Down, x));
                 }
                 Matching::Applied(_) | Matching::Variant(_, _) => {
                     if m.is_reversable() {
-                        plan.push((Dir::Down, m.get_best_down_migration()));
+                        plan.push(Step(Dir::Down, m.get_best_down_migration()));
                     } else if !self.ignore_unreversable {
                         return Err(Error::UnrollbackableMigration);
                     }
@@ -178,7 +187,7 @@ impl<'a> PlanBuilder2<'a> {
                 Matching::Divergent(x) => {
                     bad_migration_found = true;
                     if m.is_reversable() {
-                        rollback_plan_rev.push((Dir::Down, x));
+                        rollback_plan_rev.push(Step(Dir::Down, x));
                     } else {
                         return Err(Error::UnrollbackableMigration);
                     }
@@ -188,8 +197,8 @@ impl<'a> PlanBuilder2<'a> {
                     let down = m.get_best_down_migration();
                     let up = m.get_local_migration().unwrap();
                     if m.is_reversable() {
-                        rollback_plan_rev.push((Dir::Down, down));
-                        rollup_plan.push((Dir::Up, up));
+                        rollback_plan_rev.push(Step(Dir::Down, down));
+                        rollup_plan.push(Step(Dir::Up, up));
                     } else {
                         return Err(Error::UnrollbackableMigration);
                     }
@@ -197,8 +206,8 @@ impl<'a> PlanBuilder2<'a> {
                 Matching::Applied(x) => {
                     if bad_migration_found {
                         if m.is_reversable() {
-                            rollback_plan_rev.push((Dir::Down, x));
-                            rollup_plan.push((Dir::Up, x));
+                            rollback_plan_rev.push(Step(Dir::Down, x));
+                            rollup_plan.push(Step(Dir::Up, x));
                         } else {
                             return Err(Error::UnrollbackableMigration);
                         }
@@ -206,7 +215,7 @@ impl<'a> PlanBuilder2<'a> {
                 }
                 Matching::Pending(x) => {
                     bad_migration_found = true;
-                    rollup_plan.push((Dir::Up, x));
+                    rollup_plan.push(Step(Dir::Up, x));
                 }
             }
         }
@@ -233,8 +242,8 @@ impl<'a> PlanBuilder2<'a> {
                 }
                 Matching::Applied(_) | Matching::Variant(_, _) => {
                     if m.is_reversable() {
-                        rollback_plan.push((Dir::Down, m.get_best_down_migration()));
-                        rollup_plan_rev.push((Dir::Up, m.get_local_migration().unwrap()));
+                        rollback_plan.push(Step(Dir::Down, m.get_best_down_migration()));
+                        rollup_plan_rev.push(Step(Dir::Up, m.get_local_migration().unwrap()));
                     } else if !self.ignore_unreversable {
                         return Err(Error::UnrollbackableMigration);
                     }
